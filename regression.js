@@ -26,7 +26,7 @@ Regression.init = function (raw_input) {
 };
 
 // raw_input example: [[0,0], [1,1]] -> x1, x2,...., xn, y
-Regression.prototype.process = function (alpha, num_iters, transform) {
+Regression.prototype.process = function (raw_input, alpha, num_iters, transform) {
     var input_matrix = $M(raw_input);
 
     // num features
