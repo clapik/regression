@@ -2,7 +2,7 @@
  * Created by toanngo on 10/18/2015.
  */
 $(function () {
-    var raw_input = days_25[0].data; // this data has x as timestamp -> need to transform
+    var raw_input = days_20[0].data; // this data has x as timestamp -> need to transform
     var processed_input = Regression.transformTimeStamp(raw_input, 0);
 
     var alpha = 0.001;
