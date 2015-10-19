@@ -20,4 +20,4 @@ var nextPoint = r.predict(nextX, theta);
 ```
 
 screenshot:
-![alt tag](https://raw.github.com/clapik/regression/blob/master/src/example/sample.PNG)
+![alt tag](https://raw.github.com/clapik/regression/master/src/example/sample.PNG)
