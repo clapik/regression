@@ -1,6 +1,6 @@
 # regression
 
-A library to do regression on a set of data [x, y]
+A library to do regression on a set of data [x0, x1,..., xn, y]
 
 Usage:
 ```
