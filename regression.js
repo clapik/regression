@@ -1,10 +1,6 @@
 function Regression() {
 }
 
-Regression.nData = [];
-
-Regression.transformFunc = false;
-
 // constructor
 Regression.init = function (raw_input) {
     var R = new Regression();
@@ -15,7 +11,6 @@ Regression.init = function (raw_input) {
     R.n = input_matrix.dimensions().cols - 1;
 
     // Get parameters
-
     // feature matrix x, with 1s in front
     R.x = this.getX(input_matrix, R.n);
     // get result vector
@@ -25,42 +20,59 @@ Regression.init = function (raw_input) {
     return R;
 };
 
-// raw_input example: [[0,0], [1,1]] -> x1, x2,...., xn, y
-Regression.prototype.process = function (raw_input, alpha, num_iters, transform) {
-    var input_matrix = $M(raw_input);
+/**
+ * INSTANCE METHODS
+ */
 
-    // num features
-    var n = input_matrix.dimensions().cols - 1;
-
-    // Get parameters
-    // feature matrix x
-    var x = this.getX(input_matrix, n);
-
-    // do we transform the matrix?
-    if (transform) {
-        this.transformFunc = transform;
-        x = this.transformX(x, this.transformFunc);
-    }
-
-    //x = addRoot2Feature(x);
-    //
-    //n += 1; // because we added a feature
-
-    // normalize features to (1,1)
-    this.nData = this.getNormalizationData(x);
-    x = this.normalizeFeatures(x);
-
-    var y = this.getY(input_matrix);
-    var theta = Vector.Zero(n + 1); // remember there's a ones in front
-
-    return this.gradientDescent(x, y, theta, alpha, num_iters);
-};
-
-Regression.transformX = function (x, transform) {
-    return this.getOnes(x.dimensions().rows).augment(x.col(2).map(function (value) {
-        return transform(value);
+Regression.prototype.transform = function (f) {
+    this.f = f;
+    this.x = Regression.getOnes(this.x.dimensions().rows).augment(this.x.col(2).map(function (value) {
+        return f(value);
     }));
 };
+
+// Normalize the feature matrix x
+Regression.prototype.normalize = function () {
+    // get normalization data, which will be used later to predict results
+    this.nData = Regression.getNormalizationData(this.x);
+    this.x = Regression.normalizeFeatures(this.x, this.nData);
+};
+
+Regression.prototype.process = function (alpha, num_iters) {
+    // normalize otherwise it's gonna be hard to get result
+    this.normalize();
+    return Regression.gradientDescent(this.x, this.y, this.theta, alpha, num_iters);
+};
+
+Regression.prototype.predict = function (x, theta) {
+    if (!this.f) {
+        return [x, Regression.hypothesis($V([1, this.normalizeX(x)]), theta)];
+    }
+    else {
+        return [x, Regression.hypothesis($V([1, this.normalizeX(this.f(x))]), theta)];
+    }
+};
+
+// used for de-normalize a single value of x (not array/vector/matrix)
+Regression.prototype.denormalizeX = function (x) {
+    var min = this.nData[0].min;
+    var max = this.nData[0].max;
+    var mean = this.nData[0].mean;
+    return x * (max - min) + mean;
+};
+
+Regression.prototype.normalizeX = function (x) {
+    var min = this.nData[0].min;
+    var max = this.nData[0].max;
+    var mean = this.nData[0].mean;
+    return (x - mean) / (max - min);
+};
+
+/**
+ * CLASS METHODS
+ *
+ * These methods must be immutable
+ */
 
 // need to add a column of 1's in front of x matrix
 Regression.getX = function (input_matrix, num_features) {
@@ -93,11 +105,12 @@ Regression.addRoot2Feature = function (x) { // x contains [1,xi]...
     }))
 };
 
-// x is a vector! not a matrix in this case
+// x is a vector! not a matrix in this case. Take the scalar product and we're good
 Regression.hypothesis = function (x, theta) {
     return x.dot(theta)
 };
 
+// compute the cost of a hypothesis, given a specific theta
 Regression.computeCost = function (x, y, theta) {
     var m = y.dimensions(); // num rows
 
@@ -109,6 +122,8 @@ Regression.computeCost = function (x, y, theta) {
     return innerSum / (2 * m);
 };
 
+// gradually reduce the cost function. Note: x should be normalized,
+// alpha should be relatively small to x, and num_iters should be in thousands.
 Regression.gradientDescent = function (x, y, theta, alpha, num_iters) {
     var m = y.dimensions(); // num rows
 
@@ -117,11 +132,17 @@ Regression.gradientDescent = function (x, y, theta, alpha, num_iters) {
     while (num_iters > 0) {
         for (var j = 1; j <= theta.dimensions(); j++) { // loop through theta values
             var innerSum = 0;
+
             for (var i = 1; i <= m; i++) {
                 innerSum += (this.hypothesis(x.row(i), theta) - y.e(i)) * x.e(i, j);
             }
+
             var newThetaValue = theta.e(j) - innerSum * alpha / m;
-            theta.setE(j, newThetaValue);
+
+            theta = theta.setE(j, newThetaValue);
+
+            // keep track of the computed costs. Very useful for 2 reasons: 1) pick another alpha if computed costs
+            // do not decrease as iteration goes, and 2) to compare different theta for different feature set
             computedCosts.push(this.computeCost(x, y, theta));
         }
 
@@ -131,50 +152,48 @@ Regression.gradientDescent = function (x, y, theta, alpha, num_iters) {
     return theta;
 };
 
-Regression.getPoint = function (x, theta) {
-    if (!this.transformFunc) {
-        return [x, this.hypothesis($V([1, this.normalizeX(x)]), theta)];
-    }
-    else {
-        return [x, this.hypothesis($V([1, this.normalizeX(this.transformFunc(x))]), theta)];
-    }
-};
-
 // input as an array with x = timestamp. Only works with [x,y] pair for now.
-Regression.transformTimeStamp = function (input) {
+// location denotes where in the array the date time is
+// this method will normalize date time into 1, 2, 3, 4, 5...
+Regression.transformTimeStamp = function (input, location) {
     var copy = this.deepArrayCopy(input);
 
     var min = Number.POSITIVE_INFINITY;
     var max = Number.NEGATIVE_INFINITY;
 
     for (var i = 0; i < copy.length; i++) {
-        if (copy[i][0] > max) max = copy[i][0];
-        if (copy[i][0] < min) min = copy[i][0];
+        if (copy[i][location] > max) max = copy[i][location];
+        if (copy[i][location] < min) min = copy[i][location];
     }
 
     for (i = 0; i < copy.length; i++) {
-        copy[i][0] = (copy[i][0] - min) / (24 * 3600 * 1000)
+        copy[i][location] = (copy[i][location] - min) / (24 * 3600 * 1000)
     }
 
     return copy;
 };
 
+// immutable method for array copy
 Regression.deepArrayCopy = function (array) {
     return $.extend(true, [], array);
 };
 
-Regression.normalizeFeatures = function (x) {
+// normalize ALL features in feature matrix x, with a specific normalization data
+// normalization is EXTREMELY IMPORTANT, especially when it involves exponents, root, invert, etc
+Regression.normalizeFeatures = function (x, nData) {
     var n = x.dimensions().cols; // num features
     var rows = x.dimensions().rows; // num rows
 
     var newX = this.getOnes(rows);
 
-    for (var i = 2; i <= n; i++) { // normalize each feature; remember x starts with 1 -> ignore 1
-        var min = this.nData[i - 2][0];
-        var max = this.nData[i - 2][1];
-        var mean = this.nData[i - 2][2];
+    // normalize each feature; remember x starts with 1 -> ignore 1
+    for (var i = 2; i <= n; i++) {
+        var min = nData[i - 2].min;
+        var max = nData[i - 2].max;
+        var mean = nData[i - 2].mean;
 
-        var copy = this.deepArrayCopy(x.col(i).getArray()); // get the array from vector x[i]
+        // get the array from vector x[i]
+        var copy = this.deepArrayCopy(x.col(i).getArray());
 
         // start normalizing
         for (var j = 0; j < copy.length; j++) {
@@ -187,21 +206,8 @@ Regression.normalizeFeatures = function (x) {
     return newX;
 };
 
-// used for de-normalize a single value of x (not array/vector/matrix)
-Regression.denormalizeX = function (x) {
-    var min = this.nData[0][0];
-    var max = this.nData[0][1];
-    var mean = this.nData[0][2];
-    return x * (max - min) + mean;
-};
-
-Regression.normalizeX = function (x) {
-    var min = this.nData[0][0];
-    var max = this.nData[0][1];
-    var mean = this.nData[0][2];
-    return (x - mean) / (max - min);
-};
-
+// for a specific feature matrix x, i want to retrieve its normalization data
+// the result should be nData = [{minX1, maxX1, meanX1}, {minX2, maxX2, meanX2}, ...]
 Regression.getNormalizationData = function (x) {
     var n = x.dimensions().cols; // num features
     var rows = x.dimensions().rows; // num rows
@@ -223,7 +229,7 @@ Regression.getNormalizationData = function (x) {
         }
 
         mean = sum / rows;
-        result.push([min, max, mean]);
+        result.push({min: min, max: max, mean: mean});
     }
 
     return result;

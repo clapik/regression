@@ -36,8 +36,9 @@ Vector.prototype = {
 
     setE: function (i, e) {
         if (i < 1 || i > this.elements.length) return null;
-        this.elements[i - 1] = e;
-        return this.elements[i - 1];
+        var v = $V(this.elements);
+        v.elements[i-1] = e;
+        return v;
     },
 
     getArray: function() {
