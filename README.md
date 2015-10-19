@@ -18,3 +18,6 @@ var theta = r.process();
 // predict the next data point based on theta
 var nextPoint = r.predict(nextX, theta);
 ```
+
+screenshot:
+![alt tag](https://raw.github.com/clapik/regression/blob/master/src/example/sample.PNG)
